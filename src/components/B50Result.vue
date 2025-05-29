@@ -1,0 +1,847 @@
+<template>
+  <div class="b50-result" ref="b50Container">
+    <div v-if="userData" class="b50-container">
+      <div class="player-info">
+        <h2>{{ userData.nickname }} 的 B50 成绩</h2>
+        <div class="rating-info">
+          <span class="rating-label">Rating:</span>
+          <span class="rating-value">{{ userData.rating }}</span>
+        </div>
+        <div class="data-source">数据来源: <a href="https://www.diving-fish.com/" target="_blank">diving-fish</a></div>
+      </div>
+      
+      <!-- 旧曲谱成绩展示 -->
+      <div class="charts-section" v-if="userData.charts && userData.charts.sd && userData.charts.sd.length > 0">
+        <h3>旧曲谱 (B{{ userData.charts.sd.length }})</h3>
+        <div class="charts-grid">
+          <div v-for="(chart, index) in userData.charts.sd" :key="`sd-${index}`" class="chart-item">
+            <div class="chart-header" :class="getDifficultyClass(chart.level_index)">
+              <span class="chart-title">{{ chart.title }}</span>
+              <span class="chart-level">{{ chart.level_label }}</span>
+            </div>
+            <div class="chart-content">
+              <div class="chart-row">
+                <!-- 添加封面图片 -->
+                <div class="chart-cover">
+                  <img :src="getCoverImageUrl(chart.song_id)" @error="handleImageError($event, chart.song_id)" alt="歌曲封面" class="cover-img">
+                  <span class="chart-type">{{ chart.type }}</span>
+                </div>
+                
+                <div class="chart-stats">
+                  <div class="chart-achievement">{{ formatAchievement(chart.achievements) }}%</div>
+                  <div class="chart-details">
+                    <span class="chart-ds">{{ chart.ds.toFixed(1) }}</span>
+                    <span class="chart-ra">{{ chart.ra }}</span>
+                    <span v-if="chart.fc" :class="getFcClass(chart.fc)">{{ formatFcText(chart.fc) }}</span>
+                    <span v-if="chart.fs" :class="getFsClass(chart.fs)">{{ formatFsText(chart.fs) }}</span>
+                  </div>
+                  <div class="chart-dx-score" v-if="chart.dxScore">
+                    <div class="dx-score-container">
+                      <span>{{ chart.dxScore }}/{{ getTotalDxScore(chart) }}</span>
+                      <!-- 使用组件替代图片 -->
+                      <div class="dx-stars" v-if="getTotalDxScore(chart)">
+                        <star-icon v-for="(star, i) in getDxStars(chart)" :key="i" 
+                           :size="14" 
+                           :color="getStarColor(star)" 
+                           class="dx-star-icon" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 新曲谱成绩展示 -->
+      <div class="charts-section" v-if="userData.charts && userData.charts.dx && userData.charts.dx.length > 0">
+        <h3>新曲谱 (B{{ userData.charts.dx.length }})</h3>
+        <div class="charts-grid">
+          <div v-for="(chart, index) in userData.charts.dx" :key="`dx-${index}`" class="chart-item">
+            <div class="chart-header" :class="getDifficultyClass(chart.level_index)">
+              <span class="chart-title">{{ chart.title }}</span>
+              <span class="chart-level">{{ chart.level_label }}</span>
+            </div>
+            <div class="chart-content">
+              <div class="chart-row">
+                <!-- 添加封面图片 -->
+                <div class="chart-cover">
+                  <img :src="getCoverImageUrl(chart.song_id)" @error="handleImageError($event, chart.song_id)" alt="歌曲封面" class="cover-img">
+                  <span class="chart-type">{{ chart.type }}</span>
+                </div>
+                
+                <div class="chart-stats">
+                  <div class="chart-achievement">{{ formatAchievement(chart.achievements) }}%</div>
+                  <div class="chart-details">
+                    <span class="chart-ds">{{ chart.ds.toFixed(1) }}</span>
+                    <span class="chart-ra">{{ chart.ra }}</span>
+                    <span v-if="chart.fc" :class="getFcClass(chart.fc)">{{ formatFcText(chart.fc) }}</span>
+                    <span v-if="chart.fs" :class="getFsClass(chart.fs)">{{ formatFsText(chart.fs) }}</span>
+                  </div>
+                  <div class="chart-dx-score" v-if="chart.dxScore">
+                    <div class="dx-score-container">
+                      <span>{{ chart.dxScore }}/{{ getTotalDxScore(chart) }}</span>
+                      <!-- 使用组件替代图片 -->
+                      <div class="dx-stars" v-if="getTotalDxScore(chart)">
+                        <star-icon v-for="(star, i) in getDxStars(chart)" :key="i" 
+                           :size="14" 
+                           :color="getStarColor(star)" 
+                           class="dx-star-icon" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 无B50数据时显示 -->
+      <div v-if="!hasChartData" class="no-chart-data">
+        <el-alert
+          title="无法显示B50数据"
+          type="warning"
+          description="未找到B50成绩数据或数据格式不正确。请确保您的账号有B50数据。"
+          show-icon
+          :closable="false"
+        />
+      </div>
+      
+      <div class="actions">
+        <el-button type="primary" @click="generateImage">生成图片</el-button>
+        <el-button @click="exportData">导出数据</el-button>
+      </div>
+    </div>
+    
+    <div v-else class="no-data">
+      <p>暂无数据，请先进行查询</p>
+    </div>
+  </div>
+</template>
+
+<script>
+import { ref, computed, onMounted } from 'vue';
+import html2canvas from 'html2canvas';
+import { ElMessage } from 'element-plus';
+import musicDataService from '../utils/musicDataService';
+import StarIcon from './icons/StarIcon.vue';
+
+export default {
+  name: 'B50Result',
+  components: {
+    StarIcon
+  },
+  props: {
+    userData: Object
+  },
+  setup(props) {
+    const b50Container = ref(null);
+    const fallbackImages = ref({});
+    const isMobile = ref(false);
+    const printMode = ref(false);
+    const dxStarsData = ref({}); // 存储星数数据
+    
+    // 检测设备类型
+    onMounted(async () => {
+      checkDeviceType();
+      window.addEventListener('resize', checkDeviceType);
+      
+      // 预加载星数数据
+      if (props.userData && props.userData.charts) {
+        await loadStarsData();
+      }
+      
+      return () => {
+        window.removeEventListener('resize', checkDeviceType);
+      };
+    });
+    
+    // 预加载所有星数数据
+    const loadStarsData = async () => {
+      const allCharts = [
+        ...(props.userData.charts.sd || []),
+        ...(props.userData.charts.dx || [])
+      ];
+      
+      for (const chart of allCharts) {
+        const key = `${chart.song_id}_${chart.level_index}`;
+        const totalDxScore = await musicDataService.getTotalDxScore(chart.song_id, chart.level_index);
+        const stars = musicDataService.calculateDxStars(chart.dxScore, totalDxScore);
+        dxStarsData.value[key] = { totalDxScore, stars };
+      }
+    };
+    
+    const checkDeviceType = () => {
+      isMobile.value = window.innerWidth < 768;
+    };
+    
+    // 检查是否有图表数据
+    const hasChartData = computed(() => {
+      return props.userData && 
+             props.userData.charts && 
+             ((props.userData.charts.sd && props.userData.charts.sd.length > 0) || 
+              (props.userData.charts.dx && props.userData.charts.dx.length > 0));
+    });
+    
+    // 根据难度级别返回对应的CSS类名
+    const getDifficultyClass = (levelIndex) => {
+      const classes = ['basic', 'advanced', 'expert', 'master', 'remaster'];
+      return classes[levelIndex] || 'basic';
+    };
+    
+    // 格式化成绩数值，处理可能的非数字情况
+    const formatAchievement = (achievement) => {
+      if (typeof achievement === 'number') {
+        return achievement.toFixed(4);
+      } else if (typeof achievement === 'string') {
+        const num = parseFloat(achievement);
+        return isNaN(num) ? '0.0000' : num.toFixed(4);
+      }
+      return '0.0000';
+    };
+
+    // 获取封面图片URL
+    const getCoverImageUrl = (songId) => {
+      if (fallbackImages.value[songId]) {
+        return fallbackImages.value[songId];
+      }
+      return musicDataService.getCoverUrl(songId);
+    };
+
+    // 处理图片加载错误，尝试使用备用图片
+    const handleImageError = (event, songId) => {
+      // 如果已经尝试过备用图片但仍失败，使用默认图片
+      if (fallbackImages.value[songId]) {
+        event.target.src = '/covers/0.png'; // 默认图片
+        return;
+      }
+      
+      // 尝试使用备用图片
+      const fallbackUrl = musicDataService.getFallbackCoverUrl(songId);
+      fallbackImages.value[songId] = fallbackUrl;
+      event.target.src = fallbackUrl;
+    };
+    
+    // 获取总DX分数（同步）
+    const getTotalDxScore = (chart) => {
+      const key = `${chart.song_id}_${chart.level_index}`;
+      return dxStarsData.value[key]?.totalDxScore || 0;
+    };
+    
+    // 计算DX星级（同步）
+    const getDxStars = (chart) => {
+      const key = `${chart.song_id}_${chart.level_index}`;
+      return dxStarsData.value[key]?.stars || [];
+    };
+    
+    // 获取星星颜色
+    const getStarColor = (starType) => {
+      return musicDataService.getStarColor(starType);
+    };
+    
+    // 格式化FC文本显示
+    const formatFcText = (fcValue) => {
+      const fc = fcValue.toLowerCase();
+      if (fc === 'fcp') return 'fc+';
+      if (fc === 'app') return 'ap+';
+      return fcValue;
+    };
+    
+    // 获取FC的CSS类名
+    const getFcClass = (fcValue) => {
+      const fc = fcValue.toLowerCase();
+      if (fc === 'fc' || fc === 'fcp') return 'chart-fc-green';
+      if (fc === 'ap' || fc === 'app') return 'chart-fc-orange';
+      return 'chart-fc-green'; // 默认绿色
+    };
+    
+    // 格式化FS文本显示
+    const formatFsText = (fsValue) => {
+      const fs = fsValue.toLowerCase();
+      if (fs === 'fsp') return 'fs+';
+      if (fs === 'fsd') return 'fdx';
+      if (fs === 'fsdp') return 'fdx+';
+      return fsValue;
+    };
+    
+    // 获取FS的CSS类名
+    const getFsClass = (fsValue) => {
+      const fs = fsValue.toLowerCase();
+      if (fs === 'sync') return 'chart-fs-blue';
+      if (fs === 'fs' || fs === 'fsp') return 'chart-fs-green';
+      if (fs === 'fsd' || fs === 'fsdp') return 'chart-fs-orange';
+      return 'chart-fs-green'; // 默认绿色
+    };
+    
+    // 生成图片功能
+    const generateImage = async () => {
+      if (!b50Container.value) return;
+      
+      try {
+        // 临时添加打印模式类
+        printMode.value = true;
+        b50Container.value.classList.add('print-mode');
+        
+        // 等待DOM更新
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const canvas = await html2canvas(b50Container.value, {
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          scale: 2,
+          width: 1600,  // 增加生成图片的宽度
+          windowWidth: 1600
+        });
+        
+        const imgUrl = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.download = `${props.userData.nickname}_B50_${new Date().getTime()}.png`;
+        link.href = imgUrl;
+        link.click();
+        
+        // 移除打印模式
+        printMode.value = false;
+        b50Container.value.classList.remove('print-mode');
+        
+        ElMessage.success('图片已成功生成并下载');
+      } catch (error) {
+        console.error('生成图片失败:', error);
+        ElMessage.error('生成图片失败，请稍后再试');
+        
+        // 确保移除打印模式
+        printMode.value = false;
+        if (b50Container.value) {
+          b50Container.value.classList.remove('print-mode');
+        }
+      }
+    };
+    
+    // 导出数据功能
+    const exportData = () => {
+      if (!props.userData) return;
+      
+      try {
+        const dataStr = JSON.stringify(props.userData, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        
+        const link = document.createElement('a');
+        link.download = `${props.userData.nickname}_B50_data_${new Date().getTime()}.json`;
+        link.href = url;
+        link.click();
+        
+        URL.revokeObjectURL(url);
+        ElMessage.success('数据已成功导出');
+      } catch (error) {
+        console.error('导出数据失败:', error);
+        ElMessage.error('导出数据失败，请稍后再试');
+      }
+    };
+    
+    return {
+      b50Container,
+      hasChartData,
+      isMobile,
+      getDifficultyClass,
+      formatAchievement,
+      getCoverImageUrl,
+      handleImageError,
+      generateImage,
+      exportData,
+      getTotalDxScore,
+      getDxStars,
+      getStarColor,
+      formatFcText,
+      getFcClass,
+      formatFsText,
+      getFsClass
+    };
+  }
+};
+</script>
+
+<style scoped>
+.b50-result {
+  margin: 0; /* 移除左右边距 */
+  /* max-width: 100%; */
+  padding: 20px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  width: 100%; /* 确保占满容器宽度 */
+  box-sizing: border-box; /* 包含padding在宽度计算内 */
+}
+
+/* 为电脑端添加适当的边距 */
+@media (min-width: 768px) {
+  .b50-result {
+    margin: 20px auto; /* 上下20px，左右自动居中 */
+    max-width: calc(100% - 40px); /* 减去总边距 */
+  }
+}
+
+@media (min-width: 1200px) {
+  .b50-result {
+    margin: 20px auto;
+    max-width: calc(100% - 40px);
+  }
+}
+
+.player-info {
+  text-align: center;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #dcdfe6;
+  position: relative;
+}
+
+.data-source {
+  font-size: 14px;
+  color: #909399;
+  margin-top: 10px;
+  margin-bottom: 0px;
+}
+
+.data-source a {
+  color: #409EFF;
+  text-decoration: none;
+}
+
+.data-source a:hover {
+  text-decoration: underline;
+}
+
+.rating-info {
+  font-size: 18px;
+  margin-top: 10px;
+}
+
+.rating-value {
+  font-weight: bold;
+  color: #409EFF;
+  font-size: 24px;
+}
+
+.charts-section {
+  margin-bottom: 30px;
+}
+
+.charts-section h3 {
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+/* 默认电脑端布局：一行三个 */
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    width: 100%; /* 确保占满父容器 */
+}
+
+/* 移动端布局：一行一个 */
+@media (max-width: 767px) {
+  .charts-grid {
+    grid-template-columns: 1fr;
+    width: 100%; /* 移动端改为一行1个 */
+  }
+}
+
+/* 平板布局：一行两个 */
+@media (min-width: 768px) and (max-width: 991px) {
+  .charts-grid {
+    grid-template-columns: repeat(2, 1fr);
+    width: 100%; /* 平板端改为一行2个 */
+  }
+}
+
+/* 小屏电脑布局：一行三个 */
+@media (min-width: 992px) and (max-width: 1199px) {
+  .charts-grid {
+    grid-template-columns: repeat(3, 1fr);
+    width: 100%; /* 小屏电脑端改为一行3个 */
+  }
+}
+
+/* 大屏电脑布局：一行四个，增加显示密度 */
+@media (min-width: 1200px) {
+  .charts-grid {
+    grid-template-columns: repeat(4, 1fr); 
+    width: 100%; /* 大屏电脑端改为一行4个 */
+  }
+}
+
+
+.chart-item {
+  background-color: white;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-header {
+  padding: 8px 12px;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chart-header.basic {
+  background-color: #6cd75e;
+}
+
+.chart-header.advanced {
+  background-color: #fbba33;
+}
+
+.chart-header.expert {
+  background-color: #f76e65;
+}
+
+.chart-header.master {
+  background-color: #9061f9;
+}
+
+.chart-header.remaster {
+  background-color: #bb5cf1;
+}
+
+.chart-title {
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.chart-content {
+  padding: 12px;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  width: 100%;
+}
+
+/* 在电脑端和打印模式下，图片和文字并排显示
+@media (min-width: 768px) {
+  .chart-row {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+  
+  .chart-stats {
+    margin-left: 12px;
+    text-align: left !important;
+    flex: 1;
+  }
+} */
+
+.chart-cover {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  margin-bottom: 10px;
+}
+
+/* 移动端封面稍大 */
+@media (max-width: 767px) {
+  .chart-cover {
+    width: 120px;
+    height: 120px;
+  }
+}
+
+.cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.chart-type {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 2px 6px;
+  font-size: 12px;
+  border-radius: 0 4px 0 4px;
+}
+
+.chart-stats {
+  width: 100%;
+  margin-left: 12px;
+  text-align: left !important;
+  flex: 1;
+}
+
+.chart-achievement {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  /* margin-top: -6px; */
+}
+
+.chart-details {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.chart-ds, .chart-ra {
+  background-color: #ecf5ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #606266;
+}
+
+.chart-fc, .chart-fs {
+  background-color: #f0f9eb;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #67c23a;
+}
+
+.chart-dx-score {
+  font-size: 13px;
+  color: #606266;
+}
+
+.dx-star-icon {
+  margin-right: 1px;
+}
+
+.dx-star-img {
+  width: 16px;
+  height: 16px;
+  margin-right: 2px;
+}
+
+/* DX分数和星星容器 - 让它们在一行显示 */
+.dx-score-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dx-stars {
+  display: flex;
+  align-items: center;
+  gap: 1px; /* 缩小星星间距 */
+  margin-top: 0; /* 移除上边距，因为现在在同一行 */
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+/* 打印模式下隐藏按钮 */
+.print-mode .actions {
+  display: none !important;
+}
+
+/* 打印模式下的样式 */
+.print-mode {
+  background-color: transparent !important; /* 去掉背景 */
+  color: #333333;
+  padding: 30px;
+  border-radius: 0; /* 去除圆角 */
+  margin: 0;
+  width: 1600px;
+  box-shadow: none !important; /* 去除阴影 */
+  border: none !important; /* 去除边框 */
+}
+
+/* 打印模式下的标题样式 */
+.print-mode .player-info {
+  text-align: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: none; /* 去除标题下方边框 */
+  position: relative;
+  width: 1600px; /* 确保宽度 */
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* 水平居中 */
+}
+
+.print-mode .player-info h2 {
+  font-size: 50px; /* 放大标题字体 */
+  font-weight: bold;
+  margin-bottom: 5px;
+  color: #333333;
+  text-align: center;
+  width: 100%;
+}
+
+.print-mode .rating-info {
+  font-size: 40px; /* 放大rating信息 */
+  margin-top: 0px;
+  text-align: center;
+}
+
+.print-mode .rating-value {
+  font-size: 50px; /* 放大rating数值 */
+}
+
+.print-mode .data-source {
+  text-align: center;
+  width: 100%;
+  font-size: 30px; /* 放大数据来源字体 */
+  margin-top: 10px;
+  margin-bottom: -10px;
+}
+
+/* 生成图片时的布局：一行五个 */
+.print-mode .charts-grid {
+  grid-template-columns: repeat(5, 1fr) !important;
+  gap: 10px !important;
+  width: calc(1600px - 60px) !important;
+}
+
+.print-mode .b50-result {
+  padding: 30px !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  width: 1600px !important;
+  border: none !important; /* 去除边框 */
+  background-color: transparent !important; /* 去掉背景 */
+}
+
+/* 打印模式下的chart-item调整 */
+.print-mode .chart-item {
+  background-color: #f9fafb;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08); /* 减弱阴影 */
+  border: none; /* 去除边框 */
+  min-width: 0;
+  flex: 1;
+  display: flex;
+}
+
+.print-mode .chart-achievement {
+  font-size: 30px; /* 放大成绩数值 */
+  font-weight: bold;
+  margin-bottom: 3px;
+  margin-top: -5px;
+}
+
+.print-mode .chart-ds,
+.print-mode .chart-ra {
+  background-color: #ecf5ff;
+  padding: 2px 4px; /* 增加内边距 */
+  border-radius: 4px;
+  font-size: 16px; /* 放大字体 */
+  color: #606266;
+}
+.print-mode .chart-fc-green,
+.print-mode .chart-fc-orange,
+.print-mode .chart-fs-blue,
+.print-mode .chart-fs-green,
+.print-mode .chart-fs-orange {
+  padding: 2px 4px; /* 增加内边距 */
+  border-radius: 4px;
+  font-size: 16px; /* 放大字体 */
+}
+
+.print-mode .dx-score-container {
+  font-size: 16px; /* 放大DX分数字体 */
+  color: #606266;
+}
+
+/* 打印模式下的chart-title调整 */
+.print-mode .chart-title {
+  max-width: 120px;
+}
+
+
+/* 打印模式下的封面图片调整 */
+.print-mode .chart-cover {
+  width: 100px;
+  height: 100px;
+}
+
+/* 打印模式下的chart-content调整 */
+.print-mode .chart-content {
+  padding: 6px;
+}
+
+/* 打印模式下的二级三级标题调整 */
+.print-mode .charts-section h3 {
+  font-size: 36px !important; /* 调大二级三级标题字体 */
+  font-weight: bold;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: none !important; /* 去除二级三级标题下方的分割线 */
+  color: #333333;
+}
+
+/* FC样式 - 根据不同值显示不同颜色 */
+.chart-fc-green {
+  background-color: #f0f9eb;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #67c23a;
+}
+
+.chart-fc-orange {
+  background-color: #fef0e6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #e6a23c;
+}
+
+/* FS样式 - 根据不同值显示不同颜色 */
+.chart-fs-blue {
+  background-color: #ecf5ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #409eff;
+}
+
+.chart-fs-green {
+  background-color: #f0f9eb;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #67c23a;
+}
+
+.chart-fs-orange {
+  background-color: #fef0e6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #e6a23c;
+}
+
+.no-data {
+  text-align: center;
+  padding: 40px;
+  color: #909399;
+}
+</style>
