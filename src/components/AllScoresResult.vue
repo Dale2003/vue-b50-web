@@ -93,7 +93,7 @@
                 </div>
                 
                 <div class="chart-stats">
-                  <div class="chart-achievement" :class="getGradeClass(chart.achievements)">
+                  <div class="chart-achievement">
                     {{ formatAchievement(chart.achievements) }}%
                   </div>
                   <div class="chart-details">
@@ -188,6 +188,7 @@ export default {
     const currentPage = ref(1);
     const pageSize = ref(50);
     const displayMode = ref(false); // 新增视图模式状态
+    const fallbackImages = ref({}); // 备用图片记录
 
     // 获取评级
     const getGrade = (achievement) => {
@@ -334,8 +335,40 @@ export default {
 
     // 处理图片加载错误
     const handleImageError = (event, songId) => {
-      // 使用默认图片
-      event.target.src = '/covers/0.png';
+      const currentSrc = event.target.src;
+      
+      // 如果当前显示的是默认图片，不再尝试
+      if (currentSrc.includes('/covers/0.png')) {
+        return;
+      }
+      
+      // 如果已经尝试过第一次备用图片，尝试第二次备用图片
+      if (fallbackImages.value[songId] === 'tried_first') {
+        const secondFallbackUrl = getFallbackCoverUrl(songId);
+        fallbackImages.value[songId] = 'tried_second';
+        event.target.src = secondFallbackUrl;
+        return;
+      }
+      
+      // 如果已经尝试过第二次备用图片，使用默认图片
+      if (fallbackImages.value[songId] === 'tried_second') {
+        event.target.src = '/covers/0.png';
+        return;
+      }
+      
+      // 第一次失败，尝试第一个备用图片
+      const firstFallbackUrl = getFallbackCoverUrl(songId);
+      fallbackImages.value[songId] = 'tried_first';
+      event.target.src = firstFallbackUrl;
+    };
+
+    // 获取备用歌曲封面URL
+    const getFallbackCoverUrl = (songId) => {
+      if (parseInt(songId) < 10000) {
+        return `/covers/${parseInt(songId) + 10000}.png`;
+      } else {
+        return `/covers/${parseInt(songId) - 10000}.png`;
+      }
     };
 
     // 格式化FC文本显示

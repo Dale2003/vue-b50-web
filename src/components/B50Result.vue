@@ -222,7 +222,7 @@ export default {
       
       // 尝试使用备用图片
       const fallbackUrl = musicDataService.getFallbackCoverUrl(songId);
-      fallbackImages.value[songId] = fallbackUrl;
+        fallbackImages.value[songId] = fallbackUrl;
       event.target.src = fallbackUrl;
     };
     
