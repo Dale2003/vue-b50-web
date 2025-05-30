@@ -15,10 +15,10 @@
         </el-tab-pane>
         <el-tab-pane label="查询全部分数（测试）" name="allScores">
           <el-form-item label="QQ号">
-            <el-input v-model="form.testQQ" placeholder="请输入QQ号"></el-input>
+            <el-input v-model="form.testQQ" placeholder="可选"></el-input>
           </el-form-item>
           <el-form-item label="用户名">
-            <el-input v-model="form.testUsername" placeholder="请输入用户名（可选）"></el-input>
+            <el-input v-model="form.testUsername" placeholder="可选，若都填则默认QQ"></el-input>
           </el-form-item>
           <div class="test-warning">
             <el-alert

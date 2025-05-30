@@ -1,17 +1,23 @@
 <template>
-  <div class="all-scores-result">
+  <div class="all-scores-result" ref="allScoresContainer">
     <div v-if="allScoresData" class="scores-content">
       <!-- 用户信息 -->
       <div class="user-info">
         <h2>{{ allScoresData.nickname || '未知用户' }}</h2>
-        <p>用户名: {{ allScoresData.username || '未设置' }}</p>
-        <p>Rating: {{ allScoresData.rating || 0 }}</p>
-        <p>称号: {{ allScoresData.plate || '无' }}</p>
-        <p>总成绩数: {{ allScoresData.records ? allScoresData.records.length : 0 }}</p>
+        <div class="print-only-info">
+          <p>用户名: {{ allScoresData.username || '未设置' }} | Rating: {{ allScoresData.rating || 0 }}</p>
+          <p v-if="getActiveFilters().length > 0">筛选条件: {{ getActiveFilters().join(' | ') }}</p>
+        </div>
+        <div class="screen-only-info">
+          <p>用户名: {{ allScoresData.username || '未设置' }}</p>
+          <p>Rating: {{ allScoresData.rating || 0 }}</p>
+          <p>称号: {{ allScoresData.plate || '无' }}</p>
+          <p>总成绩数: {{ getValidRecordsCount() }}</p>
+        </div>
       </div>
 
       <!-- 分数统计 -->
-      <div class="score-stats">
+      <div class="score-stats screen-only">
         <h3>分数统计</h3>
         <div class="stats-grid">
           <div class="stat-item">
@@ -42,7 +48,7 @@
       </div>
 
       <!-- 搜索和筛选 -->
-      <div class="search-filters">
+      <div class="search-filters screen-only">
         <div class="filter-row">
           <el-input
             v-model="searchText"
@@ -58,19 +64,25 @@
             <el-option label="Master" value="3" />
             <el-option label="Re:Master" value="4" />
           </el-select>
-          <el-select v-model="filterLevel" placeholder="筛选等级" style="width: 120px;">
+          <el-select v-model="filterLevel" placeholder="筛选等级" style="width: 120px;" @change="onLevelChange">
             <el-option label="全部等级" value="all" />
             <el-option v-for="level in levelOptions" :key="level" :label="level" :value="level" />
           </el-select>
         </div>
         <div class="filter-row">
-          <el-select v-model="filterDs" placeholder="筛选定数" style="width: 140px;">
+          <el-select 
+            v-model="filterDs" 
+            placeholder="筛选定数" 
+            style="width: 140px;"
+            :disabled="filterLevel === 'all'"
+          >
             <el-option label="全部定数" value="all" />
-            <el-option label="1.0-6.9" value="low" />
-            <el-option label="7.0-9.9" value="mid" />
-            <el-option label="10.0-12.9" value="high" />
-            <el-option label="13.0-14.9" value="expert" />
-            <el-option label="15.0+" value="master" />
+            <el-option 
+              v-for="ds in availableDsOptions" 
+              :key="ds.value" 
+              :label="ds.label" 
+              :value="ds.value" 
+            />
           </el-select>
           <el-select v-model="filterGrade" placeholder="筛选评级" style="width: 120px;">
             <el-option label="全部评级" value="all" />
@@ -93,18 +105,34 @@
           </el-select>
         </div>
         <div class="filter-row">
-          <el-switch
-            v-model="displayMode"
-            active-text="卡片视图"
-            inactive-text="表格视图"
-          />
-          <el-button type="primary" @click="resetFilters">重置筛选</el-button>
+          <div class="button-group">
+            <el-switch
+              v-model="displayMode"
+              active-text="卡片视图"
+              inactive-text="表格视图"
+            />
+            <el-button type="primary" @click="resetFilters">重置筛选</el-button>
+            <el-button v-if="displayMode" type="success" @click="generateImage">生成图片</el-button>
+          </div>
         </div>
       </div>
 
       <!-- B50风格卡片展示 -->
       <div v-if="displayMode" class="charts-section">
-        <h3>筛选结果 ({{ filteredScores.length }} 首)</h3>
+        <div class="charts-header">
+          <h3>筛选结果 ({{ filteredScores.length }} 首)</h3>
+          <!-- 每页数量选择 -->
+          <div class="page-size-control">
+            <span>每页显示：</span>
+            <el-select v-model="pageSize" style="width: 80px;" size="small">
+              <el-option label="20" :value="20" />
+              <el-option label="50" :value="50" />
+              <el-option label="100" :value="100" />
+              <el-option label="200" :value="200" />
+              <el-option label="全部" :value="filteredScores.length" />
+            </el-select>
+          </div>
+        </div>
         <div class="charts-grid">
           <div v-for="(chart, index) in paginatedScores" :key="`chart-${index}`" class="chart-item">
             <div class="chart-header" :class="getDifficultyClass(chart.level_index)">
@@ -151,6 +179,20 @@
 
       <!-- 表格展示 -->
       <div v-else class="scores-table">
+        <div class="table-header">
+          <h3>筛选结果 ({{ filteredScores.length }} 首)</h3>
+          <!-- 每页数量选择 -->
+          <div class="page-size-control">
+            <span>每页显示：</span>
+            <el-select v-model="pageSize" style="width: 80px;" size="small">
+              <el-option label="20" :value="20" />
+              <el-option label="50" :value="50" />
+              <el-option label="100" :value="100" />
+              <el-option label="200" :value="200" />
+              <el-option label="全部" :value="filteredScores.length" />
+            </el-select>
+          </div>
+        </div>
         <el-table 
           :data="paginatedScores" 
           style="width: 100%"
@@ -173,7 +215,7 @@
           </el-table-column>
           <el-table-column prop="achievements" label="达成率" width="100">
             <template #default="scope">
-              <span :class="getGradeClass(scope.row.achievements)">
+              <span style="color: #000000;">
                 {{ formatAchievement(scope.row.achievements) }}%
               </span>
             </template>
@@ -193,19 +235,21 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column prop="sync" label="同步" width="80" />
         </el-table>
       </div>
 
-      <!-- 分页 -->
-      <div class="pagination">
-        <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          :page-sizes="[20, 50, 100, 200]"
-          :total="filteredScores.length"
-          layout="total, sizes, prev, pager, next, jumper"
-        />
+      <!-- 分页控制 -->
+      <div class="pagination-controls">
+        <!-- 分页 -->
+        <div class="pagination">
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :total="filteredScores.length"
+            :layout="paginationLayout"
+            :small="isMobile"
+          />
+        </div>
       </div>
 
       <!-- 导出功能 -->
@@ -224,6 +268,7 @@
 <script>
 import { ref, computed, watch, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
+import html2canvas from 'html2canvas';
 import musicDataService from '../utils/musicDataService';
 import StarIcon from './icons/StarIcon.vue';
 
@@ -240,16 +285,18 @@ export default {
   },
   setup(props) {
     const searchText = ref('');
-    const filterDifficulty = ref('all'); // 新增难度筛选
-    const filterLevel = ref('all'); // 新增等级筛选
-    const filterDs = ref('all'); // 新增定数筛选
+    const filterDifficulty = ref('all');
+    const filterLevel = ref('all');
+    const filterDs = ref('all');
     const filterGrade = ref('all');
     const sortBy = ref('achievement_desc');
     const currentPage = ref(1);
     const pageSize = ref(50);
-    const displayMode = ref(false);
+    const displayMode = ref(true); // 默认为卡片视图
     const fallbackImages = ref({});
-    const dxStarsData = ref({}); // 存储星数数据
+    const dxStarsData = ref({});
+    const isMobile = ref(false);
+    const allScoresContainer = ref(null);
 
     // 等级选项
     const levelOptions = ref([
@@ -259,8 +306,80 @@ export default {
       '14', '14+', '15'
     ]);
 
+    // 检查设备类型
+    const checkDeviceType = () => {
+      isMobile.value = window.innerWidth < 768;
+    };
+
+    // 分页布局
+    const paginationLayout = computed(() => {
+      return isMobile.value ? 'prev, pager, next' : 'total, prev, pager, next, jumper';
+    });
+
+    // 根据定数获取对应的等级
+    const getDsLevel = (ds) => {
+      const dsValue = parseFloat(ds);
+      if (isNaN(dsValue)) return null;
+      
+      const baseLevel = Math.floor(dsValue);
+      const decimal = dsValue - baseLevel;
+      
+      if (decimal < 0.65) {
+        return baseLevel.toString();
+      } else {
+        return baseLevel + '+';
+      }
+    };
+
+    // 根据等级获取定数选项
+    const availableDsOptions = computed(() => {
+      if (filterLevel.value === 'all') return [];
+      
+      const level = filterLevel.value;
+      const options = [];
+      
+      // 根据等级确定定数范围
+      if (level.includes('+')) {
+        const baseLevel = parseInt(level.replace('+', ''));
+        const minDs = baseLevel + 0.7;
+        const maxDs = baseLevel + 0.9;
+        
+        // 生成0.1间隔的定数选项
+        for (let ds = minDs; ds <= maxDs; ds += 0.1) {
+          const dsValue = Math.round(ds * 10) / 10;
+          options.push({
+            label: dsValue.toFixed(1),
+            value: dsValue.toString()
+          });
+        }
+      } else {
+        const baseLevel = parseInt(level);
+        const minDs = baseLevel;
+        const maxDs = baseLevel + 0.6;
+        
+        // 生成0.1间隔的定数选项
+        for (let ds = minDs; ds < maxDs; ds += 0.1) {
+          const dsValue = Math.round(ds * 10) / 10;
+          options.push({
+            label: dsValue.toFixed(1),
+            value: dsValue.toString()
+          });
+        }
+      }
+      
+      return options;
+    });
+
+    // 等级变化处理
+    const onLevelChange = () => {
+      filterDs.value = 'all';
+    };
+
     // 预加载星数据
     onMounted(async () => {
+      checkDeviceType();
+      window.addEventListener('resize', checkDeviceType);
+      
       if (props.allScoresData && props.allScoresData.records) {
         await loadStarsData();
       }
@@ -327,19 +446,12 @@ export default {
       return 'lower';
     };
 
-    // 检查定数范围
-    const checkDsRange = (ds, range) => {
+    // 检查定数范围 - 更新为精确匹配
+    const checkDsRange = (ds, targetDs) => {
+      if (targetDs === 'all') return true;
       const dsValue = parseFloat(ds);
-      if (isNaN(dsValue)) return false;
-      
-      switch (range) {
-        case 'low': return dsValue >= 1.0 && dsValue < 7.0;
-        case 'mid': return dsValue >= 7.0 && dsValue < 10.0;
-        case 'high': return dsValue >= 10.0 && dsValue < 13.0;
-        case 'expert': return dsValue >= 13.0 && dsValue < 15.0;
-        case 'master': return dsValue >= 15.0;
-        default: return true;
-      }
+      const targetDsValue = parseFloat(targetDs);
+      return Math.abs(dsValue - targetDsValue) < 0.05; // 允许小误差
     };
 
     // 统计各评级数量
@@ -368,11 +480,65 @@ export default {
       return `grade-${grade}`;
     };
 
+    // 获取当前激活的筛选条件
+    const getActiveFilters = () => {
+      const filters = [];
+      
+      if (searchText.value) {
+        filters.push(`搜索: ${searchText.value}`);
+      }
+      
+      if (filterDifficulty.value !== 'all') {
+        const difficultyNames = {
+          '0': 'Basic',
+          '1': 'Advanced',
+          '2': 'Expert',
+          '3': 'Master',
+          '4': 'Re:Master'
+        };
+        filters.push(`难度: ${difficultyNames[filterDifficulty.value]}`);
+      }
+      
+      if (filterLevel.value !== 'all') {
+        filters.push(`等级: ${filterLevel.value}`);
+      }
+      
+      if (filterDs.value !== 'all') {
+        filters.push(`定数: ${filterDs.value}`);
+      }
+      
+      if (filterGrade.value !== 'all') {
+        const gradeNames = {
+          'sssp': 'SSS+',
+          'sss': 'SSS',
+          'ssp': 'SS+',
+          'ss': 'SS',
+          'sp': 'S+',
+          's': 'S',
+          'aaa': 'AAA',
+          'aa': 'AA',
+          'a': 'A'
+        };
+        filters.push(`评级: ${gradeNames[filterGrade.value]}`);
+      }
+      
+      return filters;
+    };
+
+    // 获取有效成绩数（过滤掉ID大于100000的歌曲）
+    const getValidRecordsCount = () => {
+      if (!props.allScoresData?.records) return 0;
+      return props.allScoresData.records.filter(record => record.song_id <= 100000).length;
+    };
+
     // 筛选后的分数数据
     const filteredScores = computed(() => {
       if (!props.allScoresData?.records) return [];
       
       let filtered = props.allScoresData.records.filter(record => {
+        // 全局过滤：排除ID大于100000的歌曲
+        if (record.song_id > 100000) return false;
+        
         // 搜索过滤
         const matchSearch = !searchText.value || 
           (record.title && record.title.toLowerCase().includes(searchText.value.toLowerCase()));
@@ -381,9 +547,9 @@ export default {
         const matchDifficulty = filterDifficulty.value === 'all' || 
           record.level_index === parseInt(filterDifficulty.value);
         
-        // 等级过滤
+        // 等级过滤 - 基于定数计算等级
         const matchLevel = filterLevel.value === 'all' || 
-          (record.level_label && record.level_label === filterLevel.value);
+          getDsLevel(record.ds) === filterLevel.value;
         
         // 定数过滤
         const matchDs = filterDs.value === 'all' || 
@@ -423,6 +589,44 @@ export default {
     watch([searchText, filterDifficulty, filterLevel, filterDs, filterGrade, sortBy], () => {
       currentPage.value = 1;
     });
+
+    // 生成图片
+    const generateImage = async () => {
+      try {
+        ElMessage.info('正在生成图片，请稍候...');
+        
+        // 添加打印模式样式类
+        allScoresContainer.value.classList.add('print-mode');
+        
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const options = {
+          useCORS: true,
+          allowTaint: true,
+          scale: 1,
+          width: 1600,
+          height: allScoresContainer.value.scrollHeight,
+          backgroundColor: '#ffffff'
+        };
+        
+        const canvas = await html2canvas(allScoresContainer.value, options);
+        
+        // 移除打印模式样式类
+        allScoresContainer.value.classList.remove('print-mode');
+        
+        // 下载图片
+        const link = document.createElement('a');
+        link.download = `${props.allScoresData.nickname}_all_scores_${new Date().getTime()}.png`;
+        link.href = canvas.toDataURL();
+        link.click();
+        
+        ElMessage.success('图片生成成功');
+      } catch (error) {
+        console.error('生成图片失败:', error);
+        allScoresContainer.value.classList.remove('print-mode');
+        ElMessage.error('生成图片失败，请稍后再试');
+      }
+    };
 
     // 导出全部数据
     const exportData = () => {
@@ -542,6 +746,9 @@ export default {
       return 'chart-fs-green';
     };
 
+    // 重写总成绩数获取方法，过滤掉ID大于100000的歌曲
+    // 已在上方定义，删除此重复声明
+
     return {
       searchText,
       filterDifficulty,
@@ -553,8 +760,13 @@ export default {
       pageSize,
       displayMode,
       levelOptions,
+      availableDsOptions,
       filteredScores,
       paginatedScores,
+      isMobile,
+      paginationLayout,
+      allScoresContainer,
+      onLevelChange,
       resetFilters,
       getGradeCount,
       getDifficultyText,
@@ -570,8 +782,11 @@ export default {
       getTotalDxScore,
       getDxStars,
       getStarColor,
+      generateImage,
       exportData,
-      exportFilteredData
+      exportFilteredData,
+      getActiveFilters,
+      getValidRecordsCount
     };
   }
 };
@@ -672,18 +887,50 @@ export default {
   gap: 1px;
 }
 
-.pagination {
+.pagination-controls {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  gap: 15px;
   margin-bottom: 20px;
 }
 
-.actions {
-  text-align: center;
+.page-size-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
 }
 
-.actions .el-button {
-  margin: 0 10px;
+.pagination {
+  display: flex;
+  justify-content: center;
+}
+
+/* 按钮组对齐样式 */
+.button-group {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+/* 卡片和表格头部样式 */
+.charts-header, .table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.charts-header h3, .table-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.table-header {
+  margin-bottom: 15px;
 }
 
 /* 难度颜色 */
@@ -691,7 +938,7 @@ export default {
 .difficulty-advanced { color: #FF9800; }
 .difficulty-expert { color: #F44336; }
 .difficulty-master { color: #9C27B0; }
-.difficulty-remaster { color: #E91E63; }
+.difficulty-remaster { color: #bb5cf1; }
 
 /* 评级颜色 */
 .grade-sssp { color: #FFD700; font-weight: bold; }
@@ -961,12 +1208,125 @@ export default {
   color: #e6a23c;
 }
 
+/* 屏幕显示和打印显示控制 */
+.screen-only {
+  display: block;
+}
+
+.print-only-info {
+  display: none;
+}
+
+.screen-only-info {
+  display: block;
+}
+
+/* 打印模式样式 */
+.print-mode {
+  padding: 30px !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  width: 1600px !important;
+  border: none !important;
+  background-color: white !important;
+}
+
+.print-mode .screen-only {
+  display: none !important;
+}
+
+.print-mode .print-only-info {
+  display: block !important;
+}
+
+.print-mode .screen-only-info {
+  display: none !important;
+}
+
+.print-mode .user-info {
+  background: transparent !important;
+  color: #333333 !important;
+  padding: 20px 0 !important;
+  border-radius: 0 !important;
+  margin-bottom: 30px !important;
+  border-bottom: 2px solid #333333;
+}
+
+.print-mode .user-info h2 {
+  font-size: 48px !important;
+  margin-bottom: 20px !important;
+  color: #333333 !important;
+}
+
+.print-mode .user-info p {
+  font-size: 28px !important;
+  margin: 8px 0 !important;
+  color: #333333 !important;
+}
+
+.print-mode .charts-section h3 {
+  font-size: 36px !important;
+  font-weight: bold;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  color: #333333;
+  border-bottom: 1px solid #333333;
+}
+
+.print-mode .charts-grid {
+  grid-template-columns: repeat(5, 1fr) !important;
+  gap: 10px !important;
+  width: calc(1600px - 60px) !important;
+}
+
+.print-mode .chart-item {
+  font-size: 14px !important;
+  background-color: white !important;
+  border: 1px solid #e0e0e0 !important;
+}
+
+.print-mode .chart-achievement {
+  font-size: 32px !important;
+  margin-top: -5px;
+  margin-bottom: 2px;
+}
+
+.print-mode .chart-ds, 
+.print-mode .chart-ra, 
+.print-mode .chart-fc-green, 
+.print-mode .chart-fc-orange, 
+.print-mode .chart-fs-blue, 
+.print-mode .chart-fs-green, 
+.print-mode .chart-fs-orange {
+    font-size: 16px !important;
+    padding: 1px 4px !important;
+  }
+  
+.print-mode .chart-dx-score {
+  font-size: 16px;
+  color: #606266;
+}
+
+.print-mode .chart-content {
+  background-color: white !important;
+}
+
+.print-mode .chart-details span {
+  background-color: #f5f5f5 !important;
+}
+
+.print-mode .pagination,
+.print-mode .search-filters,
+.print-mode .actions {
+  display: none !important;
+}
+
 /* 移动端适配 */
 @media (max-width: 768px) {
   .all-scores-result {
-    margin: 10px;
-    padding: 15px;
-    width: calc(100% - 20px);
+    margin: 5px;
+    padding: 10px;
+    width: calc(100% - 10px);
   }
   
   .filter-row {
@@ -979,8 +1339,64 @@ export default {
     width: 100% !important;
   }
   
+  .button-group {
+    justify-content: center;
+    gap: 10px;
+  }
+  
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+  
+  /* 移动端卡片布局优化 */
+  .charts-grid {
+    grid-template-columns: 1fr !important;
+    gap: 15px;
+    width: 100%;
+  }
+  
+  .chart-item {
+    width: 100%;
+    max-width: none;
+  }
+  
+  .chart-cover {
+    width: 80px !important;
+    height: 80px !important;
+  }
+  
+  .chart-row {
+    gap: 10px;
+  }
+  
+  .chart-stats {
+    margin-left: 10px;
+    flex: 1;
+  }
+  
+  .chart-achievement {
+    font-size: 16px !important;
+  }
+  
+  .chart-details {
+    gap: 6px;
+  }
+  
+  .chart-ds, .chart-ra, 
+  .chart-fc-green, .chart-fc-orange,
+  .chart-fs-blue, .chart-fs-green, .chart-fs-orange {
+    font-size: 11px !important;
+    padding: 1px 4px !important;
+  }
+  
+  .pagination-controls {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .pagination {
+    overflow-x: auto;
+    justify-content: flex-start;
   }
 }
 </style>

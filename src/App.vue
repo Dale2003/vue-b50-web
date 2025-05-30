@@ -24,7 +24,7 @@ const handleDataLoaded = (data, mode) => {
 <template>
   <div class="app">
     <header>
-      <h1>舞萌DX B50查询工具</h1>
+      <h1>舞萌DX查询工具</h1>
     </header>
 
     <main>
