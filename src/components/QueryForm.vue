@@ -3,15 +3,32 @@
     <div class="data-source-info">数据来源: <a href="https://www.diving-fish.com/maimaidx/prober/" target="_blank">diving-fish</a></div>
     <el-form :model="form" label-width="80px">
       <el-tabs v-model="activeTab">
-        <el-tab-pane label="QQ号查询" name="qq">
+        <el-tab-pane label="QQ号查询b50" name="qq">
           <el-form-item label="QQ号">
             <el-input v-model="form.qq" placeholder="请输入QQ号"></el-input>
           </el-form-item>
         </el-tab-pane>
-        <el-tab-pane label="用户名查询" name="username">
+        <el-tab-pane label="用户名查询b50" name="username">
           <el-form-item label="用户名">
             <el-input v-model="form.username" placeholder="请输入用户名"></el-input>
           </el-form-item>
+        </el-tab-pane>
+        <el-tab-pane label="查询全部分数（测试）" name="allScores">
+          <el-form-item label="QQ号">
+            <el-input v-model="form.testQQ" placeholder="请输入QQ号"></el-input>
+          </el-form-item>
+          <el-form-item label="用户名">
+            <el-input v-model="form.testUsername" placeholder="请输入用户名（可选）"></el-input>
+          </el-form-item>
+          <div class="test-warning">
+            <el-alert
+              title="测试功能说明"
+              type="warning"
+              description="此功能为测试版，将显示用户的全部游戏分数记录。数据量可能较大，请耐心等待。"
+              show-icon
+              :closable="false"
+            />
+          </div>
         </el-tab-pane>
       </el-tabs>
       
@@ -44,7 +61,7 @@
 import { ref, reactive } from 'vue';
 import { ElMessage } from 'element-plus';
 import axios from 'axios';
-import { fetchB50Data } from '../api/b50';
+import { fetchB50Data, getAllScoresData } from '../api/b50';
 import { UserInfo } from '../types';
 
 export default {
@@ -59,7 +76,9 @@ export default {
     const form = reactive({
       qq: '',
       username: '',
-      displayMode: 'b50'
+      displayMode: 'b50',
+      testQQ: '',
+      testUsername: ''
     });
 
     const fetchRawData = async (qq, username) => {
@@ -91,12 +110,28 @@ export default {
         error.value = '';
         loading.value = true;
         
-        // 获取查询参数
-        const qq = activeTab.value === 'qq' ? form.qq : null;
-        const username = activeTab.value === 'username' ? form.username : null;
+        // 根据不同的选项卡获取不同的查询参数
+        let qq = null;
+        let username = null;
+        
+        if (activeTab.value === 'qq') {
+          qq = form.qq;
+        } else if (activeTab.value === 'username') {
+          username = form.username;
+        } else if (activeTab.value === 'allScores') {
+          qq = form.testQQ;
+          username = form.testUsername;
+        }
         
         if (!qq && !username) {
           error.value = '请输入QQ号或用户名';
+          return;
+        }
+        
+        // 如果是测试版全部分数查询
+        if (activeTab.value === 'allScores') {
+          const allScoresData = await getAllScoresData(qq, username);
+          emit('dataLoaded', allScoresData, 'allScores');
           return;
         }
         
@@ -246,6 +281,10 @@ export default {
   /* max-height: 600px; */
   overflow-y: auto;
   white-space: pre-wrap;
+  margin-top: 10px;
+}
+
+.test-warning {
   margin-top: 10px;
 }
 </style>

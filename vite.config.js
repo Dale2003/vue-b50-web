@@ -16,6 +16,14 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',   // 允许局域网访问
     port: 5173,        // 默认端口
+    proxy: {
+      '/api': {
+        target: 'https://www.diving-fish.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/api/, '/api')
+      }
+    }
   },
   base: './', // 设置为相对路径，适配部署环境
   build: {

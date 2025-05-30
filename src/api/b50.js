@@ -1,8 +1,65 @@
 import axios from 'axios';
 import { UserInfo, ChartInfo, Data } from '../types';
 
-// 配置基础的API URL
-const API_BASE_URL = 'https://www.diving-fish.com/api/maimaidxprober';
+// 配置基础的API URL - 开发环境使用代理，生产环境直接访问
+const isDevelopment = import.meta.env.DEV;
+const API_BASE_URL = isDevelopment ? '/api/maimaidxprober' : (import.meta.env.VITE_API_BASE_URL || 'https://www.diving-fish.com/api/maimaidxprober');
+
+// 更安全的token管理
+class TokenManager {
+  static #instance = null;
+  #token = null;
+  #isInitialized = false;
+  
+  constructor() {
+    if (TokenManager.#instance) {
+      return TokenManager.#instance;
+    }
+    TokenManager.#instance = this;
+    this.#initializeToken();
+  }
+  
+  #initializeToken() {
+    // 从环境变量获取token
+    const envToken = import.meta.env.VITE_DEV_API_KEY;
+    if (envToken) {
+      // 简单的运行时混淆（注意：这仍然不是完全安全的，只是增加了一些难度）
+      this.#token = this.#obfuscateToken(envToken);
+      this.#isInitialized = true;
+    } else {
+      console.error('未找到开发者token配置');
+    }
+  }
+  
+  #obfuscateToken(token) {
+    // 使用简单的异或加密和时间戳
+    const key = new Date().getDate() + 42; // 使用日期作为密钥的一部分
+    return token.split('').map((char, index) => 
+      String.fromCharCode(char.charCodeAt(0) ^ (key + index))
+    ).join('');
+  }
+  
+  #deobfuscateToken(obfuscatedToken) {
+    const key = new Date().getDate() + 42;
+    return obfuscatedToken.split('').map((char, index) => 
+      String.fromCharCode(char.charCodeAt(0) ^ (key + index))
+    ).join('');
+  }
+  
+  getToken() {
+    if (!this.#isInitialized || !this.#token) {
+      throw new Error('Token未初始化或配置错误');
+    }
+    return this.#deobfuscateToken(this.#token);
+  }
+  
+  isAvailable() {
+    return this.#isInitialized && this.#token !== null;
+  }
+}
+
+// 创建token管理器实例
+const tokenManager = new TokenManager();
 
 /**
  * 获取玩家的B50数据
@@ -441,5 +498,69 @@ export async function fetchOldB50Data(qq = null, username = null, year, musicDat
   } catch (error) {
     console.error(`获取${year}版本B50数据失败:`, error);
     throw error;
+  }
+}
+
+/**
+ * 获取玩家的全部分数列表（测试版功能）
+ * @param {string|number} qq - 玩家QQ号
+ * @param {string} username - 玩家用户名
+ * @returns {Promise<Object>} 玩家全部分数数据
+ */
+export async function getAllScoresData(qq = null, username = null) {
+  try {
+    let params = {};
+    
+    if (qq) {
+      params.qq = qq;
+    } else if (username) {
+      params.username = username;
+    } else {
+      throw new Error('需要提供QQ号或用户名');
+    }
+    
+    // 解密并设置开发者token
+    const headers = { 
+      'developer-token': tokenManager.getToken(),
+      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+    };
+    
+    console.log('正在请求全部分数数据...', params);
+    
+    const response = await axios.get(`${API_BASE_URL}/dev/player/records`, { 
+      headers, 
+      params,
+      timeout: 30000  // 30秒超时
+    });
+    
+    console.log('API响应:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('API请求详细错误:', error);
+    
+    if (error.response) {
+      // 服务器返回了错误响应
+      console.error('错误状态:', error.response.status);
+      console.error('错误数据:', error.response.data);
+      
+      if (error.response.status === 403) {
+        throw new Error('用户已设置隐私或未同意用户协议，无法获取数据');
+      } else if (error.response.status === 400 || error.response.status === 404) {
+        throw new Error('找不到此用户，请重试');
+      } else if (error.response.status === 429) {
+        throw new Error('请求频率过高，请稍后再试');
+      } else {
+        throw new Error(`服务器错误 (${error.response.status}): ${error.response.data?.message || '未知错误'}`);
+      }
+    } else if (error.request) {
+      // 请求发送了但没有收到响应
+      console.error('网络请求错误:', error.request);
+      throw new Error('网络连接失败，请检查网络设置或稍后再试');
+    } else {
+      // 其他错误
+      console.error('未知错误:', error.message);
+      throw new Error(error.message || '获取玩家全部分数失败');
+    }
   }
 }

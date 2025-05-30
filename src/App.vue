@@ -2,13 +2,21 @@
 import { ref } from 'vue';
 import QueryForm from './components/QueryForm.vue';
 import B50Result from './components/B50Result.vue';
+import AllScoresResult from './components/AllScoresResult.vue';
 import 'element-plus/dist/index.css';
 
 const userData = ref(null);
+const allScoresData = ref(null);
 const displayMode = ref('b50');
 
 const handleDataLoaded = (data, mode) => {
-  userData.value = data;
+  if (mode === 'allScores') {
+    allScoresData.value = data;
+    userData.value = null;
+  } else {
+    userData.value = data;
+    allScoresData.value = null;
+  }
   displayMode.value = mode;
 };
 </script>
@@ -22,6 +30,7 @@ const handleDataLoaded = (data, mode) => {
     <main>
       <QueryForm @dataLoaded="handleDataLoaded" />
       <B50Result v-if="displayMode === 'b50' && userData" :userData="userData" />
+      <AllScoresResult v-if="displayMode === 'allScores' && allScoresData" :allScoresData="allScoresData" />
     </main>
 
     <footer>
