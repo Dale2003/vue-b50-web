@@ -25,6 +25,7 @@
                 <div class="chart-cover">
                   <img :src="getCoverImageUrl(chart.song_id)" @error="handleImageError($event, chart.song_id)" alt="歌曲封面" class="cover-img">
                   <span class="chart-type">{{ chart.type }}</span>
+                  <span class="chart-song-id">{{ chart.song_id }}</span>
                 </div>
                 
                 <div class="chart-stats">
@@ -69,6 +70,7 @@
                 <div class="chart-cover">
                   <img :src="getCoverImageUrl(chart.song_id)" @error="handleImageError($event, chart.song_id)" alt="歌曲封面" class="cover-img">
                   <span class="chart-type">{{ chart.type }}</span>
+                  <span class="chart-song-id">{{ chart.song_id }}</span>
                 </div>
                 
                 <div class="chart-stats">
@@ -574,6 +576,17 @@ export default {
   position: absolute;
   bottom: 0;
   left: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 2px 6px;
+  font-size: 12px;
+  border-radius: 0 4px 0 4px;
+}
+
+.chart-song-id {
+  position: absolute;
+  top: 0;
+  right: 0;
   background-color: rgba(0, 0, 0, 0.7);
   color: white;
   padding: 2px 6px;

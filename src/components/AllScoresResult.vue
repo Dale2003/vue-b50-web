@@ -89,6 +89,7 @@
                 <div class="chart-cover">
                   <img :src="getCoverImageUrl(chart.song_id)" @error="handleImageError($event, chart.song_id)" alt="歌曲封面" class="cover-img">
                   <span class="chart-type">{{ chart.type || 'DX' }}</span>
+                  <span class="chart-song-id">{{ chart.song_id }}</span>
                 </div>
                 
                 <div class="chart-stats">
@@ -219,7 +220,7 @@ export default {
     // 难度样式类
     const getDifficultyClass = (levelIndex) => {
       const classes = ['basic', 'advanced', 'expert', 'master', 'remaster'];
-      return `difficulty-${classes[levelIndex] || 'unknown'}`;
+      return classes[levelIndex] || 'basic';
     };
 
     // 评级样式类
@@ -658,6 +659,17 @@ export default {
   padding: 2px 6px;
   font-size: 12px;
   border-radius: 0 4px 0 4px;
+}
+
+.chart-song-id {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 2px 6px;
+  font-size: 12px;
+  border-radius: 4px 0 4px 0;
 }
 
 .chart-stats {
