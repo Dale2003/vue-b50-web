@@ -43,35 +43,63 @@
 
       <!-- 搜索和筛选 -->
       <div class="search-filters">
-        <el-input
-          v-model="searchText"
-          placeholder="搜索歌曲名称"
-          prefix-icon="Search"
-          style="width: 300px; margin-right: 10px;"
-        />
-        <el-select v-model="filterGrade" placeholder="筛选评级" style="width: 120px; margin-right: 10px;">
-          <el-option label="全部" value="all" />
-          <el-option label="SSS+" value="sssp" />
-          <el-option label="SSS" value="sss" />
-          <el-option label="SS+" value="ssp" />
-          <el-option label="SS" value="ss" />
-          <el-option label="S+" value="sp" />
-          <el-option label="S" value="s" />
-          <el-option label="AAA" value="aaa" />
-          <el-option label="AA" value="aa" />
-          <el-option label="A" value="a" />
-        </el-select>
-        <el-select v-model="sortBy" placeholder="排序方式" style="width: 150px; margin-right: 10px;">
-          <el-option label="达成率降序" value="achievement_desc" />
-          <el-option label="达成率升序" value="achievement_asc" />
-          <el-option label="歌曲ID" value="song_id" />
-        </el-select>
-        <el-switch
-          v-model="displayMode"
-          active-text="卡片视图"
-          inactive-text="表格视图"
-          style="margin-left: 10px;"
-        />
+        <div class="filter-row">
+          <el-input
+            v-model="searchText"
+            placeholder="搜索歌曲名称"
+            prefix-icon="Search"
+            style="width: 250px;"
+          />
+          <el-select v-model="filterDifficulty" placeholder="筛选难度" style="width: 120px;">
+            <el-option label="全部难度" value="all" />
+            <el-option label="Basic" value="0" />
+            <el-option label="Advanced" value="1" />
+            <el-option label="Expert" value="2" />
+            <el-option label="Master" value="3" />
+            <el-option label="Re:Master" value="4" />
+          </el-select>
+          <el-select v-model="filterLevel" placeholder="筛选等级" style="width: 120px;">
+            <el-option label="全部等级" value="all" />
+            <el-option v-for="level in levelOptions" :key="level" :label="level" :value="level" />
+          </el-select>
+        </div>
+        <div class="filter-row">
+          <el-select v-model="filterDs" placeholder="筛选定数" style="width: 140px;">
+            <el-option label="全部定数" value="all" />
+            <el-option label="1.0-6.9" value="low" />
+            <el-option label="7.0-9.9" value="mid" />
+            <el-option label="10.0-12.9" value="high" />
+            <el-option label="13.0-14.9" value="expert" />
+            <el-option label="15.0+" value="master" />
+          </el-select>
+          <el-select v-model="filterGrade" placeholder="筛选评级" style="width: 120px;">
+            <el-option label="全部评级" value="all" />
+            <el-option label="SSS+" value="sssp" />
+            <el-option label="SSS" value="sss" />
+            <el-option label="SS+" value="ssp" />
+            <el-option label="SS" value="ss" />
+            <el-option label="S+" value="sp" />
+            <el-option label="S" value="s" />
+            <el-option label="AAA" value="aaa" />
+            <el-option label="AA" value="aa" />
+            <el-option label="A" value="a" />
+          </el-select>
+          <el-select v-model="sortBy" placeholder="排序方式" style="width: 150px;">
+            <el-option label="达成率降序" value="achievement_desc" />
+            <el-option label="达成率升序" value="achievement_asc" />
+            <el-option label="定数降序" value="ds_desc" />
+            <el-option label="定数升序" value="ds_asc" />
+            <el-option label="歌曲ID" value="song_id" />
+          </el-select>
+        </div>
+        <div class="filter-row">
+          <el-switch
+            v-model="displayMode"
+            active-text="卡片视图"
+            inactive-text="表格视图"
+          />
+          <el-button type="primary" @click="resetFilters">重置筛选</el-button>
+        </div>
       </div>
 
       <!-- B50风格卡片展示 -->
@@ -104,7 +132,14 @@
                   </div>
                   <div class="chart-dx-score" v-if="chart.dxScore">
                     <div class="dx-score-container">
-                      <span>{{ chart.dxScore }}</span>
+                      <span>{{ chart.dxScore }}/{{ getTotalDxScore(chart) }}</span>
+                      <!-- 添加星级显示 -->
+                      <div class="dx-stars" v-if="getTotalDxScore(chart)">
+                        <star-icon v-for="(star, i) in getDxStars(chart)" :key="i" 
+                           :size="14" 
+                           :color="getStarColor(star)" 
+                           class="dx-star-icon" />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -131,6 +166,11 @@
               </span>
             </template>
           </el-table-column>
+          <el-table-column prop="ds" label="定数" width="80">
+            <template #default="scope">
+              <span v-if="scope.row.ds">{{ parseFloat(scope.row.ds).toFixed(1) }}</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="achievements" label="达成率" width="100">
             <template #default="scope">
               <span :class="getGradeClass(scope.row.achievements)">
@@ -140,7 +180,19 @@
           </el-table-column>
           <el-table-column prop="fc" label="FC" width="80" />
           <el-table-column prop="fs" label="FS" width="80" />
-          <el-table-column prop="dxScore" label="DX分数" width="100" />
+          <el-table-column prop="dxScore" label="DX分数" width="120">
+            <template #default="scope">
+              <div v-if="scope.row.dxScore" class="table-dx-score">
+                <span>{{ scope.row.dxScore }}/{{ getTotalDxScore(scope.row) }}</span>
+                <div class="dx-stars-table" v-if="getTotalDxScore(scope.row)">
+                  <star-icon v-for="(star, i) in getDxStars(scope.row)" :key="i" 
+                     :size="12" 
+                     :color="getStarColor(star)" 
+                     class="dx-star-icon" />
+                </div>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column prop="sync" label="同步" width="80" />
         </el-table>
       </div>
@@ -170,11 +222,16 @@
 </template>
 
 <script>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
+import musicDataService from '../utils/musicDataService';
+import StarIcon from './icons/StarIcon.vue';
 
 export default {
   name: 'AllScoresResult',
+  components: {
+    StarIcon
+  },
   props: {
     allScoresData: {
       type: Object,
@@ -183,12 +240,78 @@ export default {
   },
   setup(props) {
     const searchText = ref('');
+    const filterDifficulty = ref('all'); // 新增难度筛选
+    const filterLevel = ref('all'); // 新增等级筛选
+    const filterDs = ref('all'); // 新增定数筛选
     const filterGrade = ref('all');
     const sortBy = ref('achievement_desc');
     const currentPage = ref(1);
     const pageSize = ref(50);
-    const displayMode = ref(false); // 新增视图模式状态
-    const fallbackImages = ref({}); // 备用图片记录
+    const displayMode = ref(false);
+    const fallbackImages = ref({});
+    const dxStarsData = ref({}); // 存储星数数据
+
+    // 等级选项
+    const levelOptions = ref([
+      '1', '2', '3', '4', '5', '6', '7', '7+', 
+      '8', '8+', '9', '9+', '10', '10+', 
+      '11', '11+', '12', '12+', '13', '13+', 
+      '14', '14+', '15'
+    ]);
+
+    // 预加载星数据
+    onMounted(async () => {
+      if (props.allScoresData && props.allScoresData.records) {
+        await loadStarsData();
+      }
+    });
+
+    // 监听数据变化，重新加载星数据
+    watch(() => props.allScoresData, async (newData) => {
+      if (newData && newData.records) {
+        await loadStarsData();
+      }
+    });
+
+    // 预加载所有星数数据
+    const loadStarsData = async () => {
+      if (!props.allScoresData?.records) return;
+      
+      for (const record of props.allScoresData.records) {
+        const key = `${record.song_id}_${record.level_index}`;
+        const totalDxScore = await musicDataService.getTotalDxScore(record.song_id, record.level_index);
+        const stars = musicDataService.calculateDxStars(record.dxScore, totalDxScore);
+        dxStarsData.value[key] = { totalDxScore, stars };
+      }
+    };
+
+    // 获取总DX分数（同步）
+    const getTotalDxScore = (chart) => {
+      const key = `${chart.song_id}_${chart.level_index}`;
+      return dxStarsData.value[key]?.totalDxScore || 0;
+    };
+
+    // 计算DX星级（同步）
+    const getDxStars = (chart) => {
+      const key = `${chart.song_id}_${chart.level_index}`;
+      return dxStarsData.value[key]?.stars || [];
+    };
+
+    // 获取星星颜色
+    const getStarColor = (starType) => {
+      return musicDataService.getStarColor(starType);
+    };
+
+    // 重置筛选
+    const resetFilters = () => {
+      searchText.value = '';
+      filterDifficulty.value = 'all';
+      filterLevel.value = 'all';
+      filterDs.value = 'all';
+      filterGrade.value = 'all';
+      sortBy.value = 'achievement_desc';
+      currentPage.value = 1;
+    };
 
     // 获取评级
     const getGrade = (achievement) => {
@@ -202,6 +325,21 @@ export default {
       if (achievement >= 90) return 'aa';
       if (achievement >= 80) return 'a';
       return 'lower';
+    };
+
+    // 检查定数范围
+    const checkDsRange = (ds, range) => {
+      const dsValue = parseFloat(ds);
+      if (isNaN(dsValue)) return false;
+      
+      switch (range) {
+        case 'low': return dsValue >= 1.0 && dsValue < 7.0;
+        case 'mid': return dsValue >= 7.0 && dsValue < 10.0;
+        case 'high': return dsValue >= 10.0 && dsValue < 13.0;
+        case 'expert': return dsValue >= 13.0 && dsValue < 15.0;
+        case 'master': return dsValue >= 15.0;
+        default: return true;
+      }
     };
 
     // 统计各评级数量
@@ -239,11 +377,23 @@ export default {
         const matchSearch = !searchText.value || 
           (record.title && record.title.toLowerCase().includes(searchText.value.toLowerCase()));
         
+        // 难度过滤
+        const matchDifficulty = filterDifficulty.value === 'all' || 
+          record.level_index === parseInt(filterDifficulty.value);
+        
+        // 等级过滤
+        const matchLevel = filterLevel.value === 'all' || 
+          (record.level_label && record.level_label === filterLevel.value);
+        
+        // 定数过滤
+        const matchDs = filterDs.value === 'all' || 
+          checkDsRange(record.ds, filterDs.value);
+        
         // 评级过滤
         const matchGrade = filterGrade.value === 'all' || 
           getGrade(record.achievements) === filterGrade.value;
         
-        return matchSearch && matchGrade;
+        return matchSearch && matchDifficulty && matchLevel && matchDs && matchGrade;
       });
 
       // 排序
@@ -251,6 +401,10 @@ export default {
         filtered.sort((a, b) => (b.achievements || 0) - (a.achievements || 0));
       } else if (sortBy.value === 'achievement_asc') {
         filtered.sort((a, b) => (a.achievements || 0) - (b.achievements || 0));
+      } else if (sortBy.value === 'ds_desc') {
+        filtered.sort((a, b) => (parseFloat(b.ds) || 0) - (parseFloat(a.ds) || 0));
+      } else if (sortBy.value === 'ds_asc') {
+        filtered.sort((a, b) => (parseFloat(a.ds) || 0) - (parseFloat(b.ds) || 0));
       } else if (sortBy.value === 'song_id') {
         filtered.sort((a, b) => a.song_id - b.song_id);
       }
@@ -266,7 +420,7 @@ export default {
     });
 
     // 监听筛选条件变化，重置到第一页
-    watch([searchText, filterGrade, sortBy], () => {
+    watch([searchText, filterDifficulty, filterLevel, filterDs, filterGrade, sortBy], () => {
       currentPage.value = 1;
     });
 
@@ -330,45 +484,24 @@ export default {
 
     // 获取封面图片URL
     const getCoverImageUrl = (songId) => {
-      return `/covers/${songId}.png`;
+      if (fallbackImages.value[songId]) {
+        return fallbackImages.value[songId];
+      }
+      return musicDataService.getCoverUrl(songId);
     };
 
     // 处理图片加载错误
     const handleImageError = (event, songId) => {
-      const currentSrc = event.target.src;
-      
-      // 如果当前显示的是默认图片，不再尝试
-      if (currentSrc.includes('/covers/0.png')) {
-        return;
-      }
-      
-      // 如果已经尝试过第一次备用图片，尝试第二次备用图片
-      if (fallbackImages.value[songId] === 'tried_first') {
-        const secondFallbackUrl = getFallbackCoverUrl(songId);
-        fallbackImages.value[songId] = 'tried_second';
-        event.target.src = secondFallbackUrl;
-        return;
-      }
-      
-      // 如果已经尝试过第二次备用图片，使用默认图片
-      if (fallbackImages.value[songId] === 'tried_second') {
+      // 如果已经尝试过备用图片但仍失败，使用默认图片
+      if (fallbackImages.value[songId]) {
         event.target.src = '/covers/0.png';
         return;
       }
       
-      // 第一次失败，尝试第一个备用图片
-      const firstFallbackUrl = getFallbackCoverUrl(songId);
-      fallbackImages.value[songId] = 'tried_first';
-      event.target.src = firstFallbackUrl;
-    };
-
-    // 获取备用歌曲封面URL
-    const getFallbackCoverUrl = (songId) => {
-      if (parseInt(songId) < 10000) {
-        return `/covers/${parseInt(songId) + 10000}.png`;
-      } else {
-        return `/covers/${parseInt(songId) - 10000}.png`;
-      }
+      // 尝试使用备用图片
+      const fallbackUrl = musicDataService.getFallbackCoverUrl(songId);
+      fallbackImages.value[songId] = fallbackUrl;
+      event.target.src = fallbackUrl;
     };
 
     // 格式化FC文本显示
@@ -411,13 +544,18 @@ export default {
 
     return {
       searchText,
+      filterDifficulty,
+      filterLevel,
+      filterDs,
       filterGrade,
       sortBy,
       currentPage,
       pageSize,
       displayMode,
+      levelOptions,
       filteredScores,
       paginatedScores,
+      resetFilters,
       getGradeCount,
       getDifficultyText,
       getDifficultyClass,
@@ -429,6 +567,9 @@ export default {
       getFcClass,
       formatFsText,
       getFsClass,
+      getTotalDxScore,
+      getDxStars,
+      getStarColor,
       exportData,
       exportFilteredData
     };
@@ -500,14 +641,35 @@ export default {
 
 .search-filters {
   margin-bottom: 20px;
+}
+
+.filter-row {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+  margin-bottom: 10px;
+}
+
+.filter-row:last-child {
+  margin-bottom: 0;
 }
 
 .scores-table {
   margin-bottom: 20px;
+}
+
+.table-dx-score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.dx-stars-table {
+  display: flex;
+  align-items: center;
+  gap: 1px;
 }
 
 .pagination {
@@ -747,6 +909,16 @@ export default {
   flex-wrap: wrap;
 }
 
+.dx-stars {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.dx-star-icon {
+  margin-right: 1px;
+}
+
 /* FC样式 */
 .chart-fc-green {
   background-color: #f0f9eb;
@@ -797,15 +969,14 @@ export default {
     width: calc(100% - 20px);
   }
   
-  .search-filters {
+  .filter-row {
     flex-direction: column;
     align-items: stretch;
   }
   
-  .search-filters .el-input,
-  .search-filters .el-select {
+  .filter-row .el-input,
+  .filter-row .el-select {
     width: 100% !important;
-    margin-bottom: 10px;
   }
   
   .stats-grid {
