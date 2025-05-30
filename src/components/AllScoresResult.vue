@@ -96,15 +96,40 @@
             <el-option label="AA" value="aa" />
             <el-option label="A" value="a" />
           </el-select>
+          <el-select v-model="filterDxStars" placeholder="筛选DX分" style="width: 120px;">
+            <el-option label="全部" value="all" />
+            <el-option label="1★" value="1" />
+            <el-option label="2★" value="2" />
+            <el-option label="3★" value="3" />
+            <el-option label="4★" value="4" />
+            <el-option label="5★" value="5" />
+          </el-select>
           <el-select v-model="sortBy" placeholder="排序方式" style="width: 150px;">
             <el-option label="达成率降序" value="achievement_desc" />
             <el-option label="达成率升序" value="achievement_asc" />
             <el-option label="定数降序" value="ds_desc" />
             <el-option label="定数升序" value="ds_asc" />
-            <el-option label="歌曲ID" value="song_id" />
+            <el-option label="单曲Ra降序" value="ra_desc" />
+            <el-option label="单曲Ra升序" value="ra_asc" />
+            <el-option label="歌曲ID升序" value="song_id" />
           </el-select>
         </div>
         <div class="filter-row">
+          <el-select v-model="filterFc" placeholder="筛选FC评级" style="width: 120px;">
+            <el-option label="全部FC评级" value="all" />
+            <el-option label="FC" value="fc" />
+            <el-option label="FC+" value="fcp" />
+            <el-option label="AP" value="ap" />
+            <el-option label="AP+" value="app" />
+          </el-select>
+          <el-select v-model="filterFs" placeholder="筛选FS评级" style="width: 120px;">
+            <el-option label="全部FS评级" value="all" />
+            <el-option label="SYNC" value="sync" />
+            <el-option label="FS" value="fs" />
+            <el-option label="FS+" value="fsp" />
+            <el-option label="FDX" value="fsd" />
+            <el-option label="FDX+" value="fsdp" />
+          </el-select>
           <div class="button-group">
             <el-switch
               v-model="displayMode"
@@ -297,6 +322,9 @@ export default {
     const filterLevel = ref('all');
     const filterDs = ref('all');
     const filterGrade = ref('all');
+    const filterDxStars = ref('all');
+    const filterFc = ref('all');
+    const filterFs = ref('all');
     const sortBy = ref('achievement_desc');
     const currentPage = ref(1);
     const pageSize = ref(50);
@@ -436,6 +464,9 @@ export default {
       filterLevel.value = 'all';
       filterDs.value = 'all';
       filterGrade.value = 'all';
+      filterDxStars.value = 'all';
+      filterFc.value = 'all';
+      filterFs.value = 'all';
       sortBy.value = 'achievement_desc';
       currentPage.value = 1;
     };
@@ -530,6 +561,31 @@ export default {
         filters.push(`评级: ${gradeNames[filterGrade.value]}`);
       }
       
+      if (filterDxStars.value !== 'all') {
+        filters.push(`星级: ${filterDxStars.value}★`);
+      }
+      
+      if (filterFc.value !== 'all') {
+        const fcNames = {
+          'app': 'AP+',
+          'ap': 'AP',
+          'fcp': 'FC+',
+          'fc': 'FC'
+        };
+        filters.push(`FC: ${fcNames[filterFc.value]}`);
+      }
+      
+      if (filterFs.value !== 'all') {
+        const fsNames = {
+          'sync': 'SYNC',
+          'fsp': 'FS+',
+          'fs': 'FS',
+          'fsdp': 'FDX+',
+          'fsd': 'FDX'
+        };
+        filters.push(`FS: ${fsNames[filterFs.value]}`);
+      }
+      
       return filters;
     };
 
@@ -567,7 +623,19 @@ export default {
         const matchGrade = filterGrade.value === 'all' || 
           getGrade(record.achievements) === filterGrade.value;
         
-        return matchSearch && matchDifficulty && matchLevel && matchDs && matchGrade;
+        // 星级过滤
+        const matchDxStars = filterDxStars.value === 'all' || 
+          getDxStars(record).length === parseInt(filterDxStars.value);
+        
+        // FC过滤
+        const matchFc = filterFc.value === 'all' || 
+          (record.fc && record.fc.toLowerCase() === filterFc.value);
+        
+        // FS过滤
+        const matchFs = filterFs.value === 'all' || 
+          (record.fs && record.fs.toLowerCase() === filterFs.value);
+        
+        return matchSearch && matchDifficulty && matchLevel && matchDs && matchGrade && matchDxStars && matchFc && matchFs;
       });
 
       // 排序
@@ -579,6 +647,10 @@ export default {
         filtered.sort((a, b) => (parseFloat(b.ds) || 0) - (parseFloat(a.ds) || 0));
       } else if (sortBy.value === 'ds_asc') {
         filtered.sort((a, b) => (parseFloat(a.ds) || 0) - (parseFloat(b.ds) || 0));
+      } else if (sortBy.value === 'ra_desc') {
+        filtered.sort((a, b) => (b.ra || 0) - (a.ra || 0));
+      } else if (sortBy.value === 'ra_asc') {
+        filtered.sort((a, b) => (a.ra || 0) - (b.ra || 0));
       } else if (sortBy.value === 'song_id') {
         filtered.sort((a, b) => a.song_id - b.song_id);
       }
@@ -599,7 +671,7 @@ export default {
     });
 
     // 监听筛选条件变化，重置到第一页
-    watch([searchText, filterDifficulty, filterLevel, filterDs, filterGrade, sortBy], () => {
+    watch([searchText, filterDifficulty, filterLevel, filterDs, filterGrade, filterDxStars, filterFc, filterFs, sortBy], () => {
       currentPage.value = 1;
     });
 
@@ -768,6 +840,9 @@ export default {
       filterLevel,
       filterDs,
       filterGrade,
+      filterDxStars,
+      filterFc,
+      filterFs,
       sortBy,
       currentPage,
       pageSize,
