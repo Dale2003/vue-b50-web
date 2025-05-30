@@ -60,7 +60,6 @@
 <script>
 import { ref, reactive } from 'vue';
 import { ElMessage } from 'element-plus';
-import axios from 'axios';
 import { fetchB50Data, getAllScoresData } from '../api/b50';
 import { UserInfo } from '../types';
 
@@ -80,30 +79,6 @@ export default {
       testQQ: '',
       testUsername: ''
     });
-
-    const fetchRawData = async (qq, username) => {
-      try {
-        let params = { b50: true };
-        
-        if (qq) {
-          params.qq = qq;
-        } else if (username) {
-          params.username = username;
-        } else {
-          throw new Error('需要提供QQ号或用户名');
-        }
-        
-        const response = await axios.post('https://www.diving-fish.com/api/maimaidxprober/query/player', params);
-        return response.data;
-      } catch (error) {
-        if (error.response && error.response.status === 400) {
-          throw new Error('找不到此用户，请重试');
-        } else if (error.response && error.response.status === 404) {
-          throw new Error('找不到此用户，请重试');
-        }
-        throw error;
-      }
-    };
 
     const queryData = async () => {
       try {
@@ -135,15 +110,15 @@ export default {
           return;
         }
         
-        // 获取原始数据（仅用于显示）
+        // 获取B50数据（同时也会获取原始数据用于显示）
+        const userData = await fetchB50Data(qq, username);
+        
+        // 如果需要显示原始数据
         if (form.displayMode === 'raw') {
-          rawData.value = await fetchRawData(qq, username);
+          rawData.value = userData.rawData || userData;
           emit('dataLoaded', null, 'raw');
           return;
         }
-        
-        // 获取B50数据
-        const userData = await fetchB50Data(qq, username);
         
         // 发送数据到父组件
         emit('dataLoaded', userData, 'b50');
