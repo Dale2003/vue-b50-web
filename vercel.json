@@ -11,6 +11,10 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/api/maimaidxprober/(.*)",
+      "destination": "https://www.diving-fish.com/api/maimaidxprober/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

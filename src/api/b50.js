@@ -1,10 +1,9 @@
 import axios from 'axios';
 import { UserInfo, ChartInfo, Data } from '../types';
 
-// 配置基础的API URL - 生产环境和开发环境都使用代理
-const API_BASE_URL = '/api/maimaidxprober';
+// 配置基础的API URL - 根据环境自动选择
 const isDevelopment = import.meta.env.DEV;
-// const API_BASE_URL = isDevelopment ? '/api/maimaidxprober' : (import.meta.env.VITE_API_BASE_URL || 'https://www.diving-fish.com/api/maimaidxprober');
+const API_BASE_URL = isDevelopment ? '/api/maimaidxprober' : '/api/maimaidxprober';
 
 // 更安全的token管理
 class TokenManager {
@@ -62,6 +61,40 @@ class TokenManager {
 // 创建token管理器实例
 const tokenManager = new TokenManager();
 
+// 创建axios实例，配置默认设置
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000, // 30秒超时
+  headers: {
+    'Content-Type': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (compatible; Vue-B50-Web/1.0)'
+  }
+});
+
+// 添加请求拦截器用于调试
+apiClient.interceptors.request.use(
+  (config) => {
+    console.log('API请求:', config.method?.toUpperCase(), config.url, config.params || config.data);
+    return config;
+  },
+  (error) => {
+    console.error('请求拦截器错误:', error);
+    return Promise.reject(error);
+  }
+);
+
+// 添加响应拦截器
+apiClient.interceptors.response.use(
+  (response) => {
+    console.log('API响应成功:', response.status, response.config.url);
+    return response;
+  },
+  (error) => {
+    console.error('API响应错误:', error.response?.status, error.config?.url, error.message);
+    return Promise.reject(error);
+  }
+);
+
 /**
  * 获取玩家的B50数据
  * @param {string|number} qq - 玩家QQ号
@@ -80,7 +113,7 @@ export async function fetchB50Data(qq = null, username = null) {
       throw new Error('需要提供QQ号或用户名');
     }
     
-    const response = await axios.post(`${API_BASE_URL}/query/player`, params);
+    const response = await apiClient.post('/query/player', params);
     return new UserInfo(response.data);
   } catch (error) {
     if (error.response && (error.response.status === 400 || error.response.status === 404)) {
@@ -111,7 +144,7 @@ export async function getScoreListDev(qq = null, username = null, developerToken
     // 设置开发者token
     const headers = { 'developer-token': developerToken };
     
-    const response = await axios.get(`${API_BASE_URL}/dev/player/records`, { 
+    const response = await apiClient.get('/dev/player/records', { 
       headers, 
       params 
     });
@@ -529,7 +562,7 @@ export async function getAllScoresData(qq = null, username = null) {
     
     console.log('正在请求全部分数数据...', params);
     
-    const response = await axios.get(`${API_BASE_URL}/dev/player/records`, { 
+    const response = await apiClient.get('/dev/player/records', { 
       headers, 
       params,
       timeout: 30000  // 30秒超时
