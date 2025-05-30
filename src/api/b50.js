@@ -3,7 +3,7 @@ import { UserInfo, ChartInfo, Data } from '../types';
 
 // 配置基础的API URL - 开发环境使用代理，生产环境直接访问
 const isDevelopment = import.meta.env.DEV;
-const API_BASE_URL = isDevelopment ? '/api/maimaidxprober' : (import.meta.env.VITE_API_BASE_URL || 'https://www.diving-fish.com/api/maimaidxprober');
+const API_BASE_URL = '/api/maimaidxprober';
 
 // 更安全的token管理
 class TokenManager {
