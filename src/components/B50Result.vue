@@ -367,9 +367,9 @@ export default {
 
 <style scoped>
 .b50-result {
-  margin: 0; /* 移除左右边距 */
-  /* max-width: 100%; */
-  padding: 20px;
+  margin: 10px; /* 移除左右边距 */
+  max-width: 100%; /* 确保在小屏幕上占满宽度 */
+  padding: 10px;
   background-color: #f5f7fa;
   border-radius: 8px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);

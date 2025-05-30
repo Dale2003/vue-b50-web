@@ -174,9 +174,9 @@ export default {
 /* 移动端样式调整 */
 @media (max-width: 767px) {
   .query-form {
-    margin: 10px;
-    padding: 15px;
-    width: calc(100% - 20px);
+    margin: 0px;
+    padding: 10px;
+    width: 100%;
   }
   
   .el-form-item {

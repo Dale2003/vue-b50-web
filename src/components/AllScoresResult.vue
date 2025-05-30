@@ -1044,9 +1044,9 @@ export default {
 /* 移动端适配 */
 @media (max-width: 768px) {
   .all-scores-result {
-    margin: 5px;
+    margin: 0px;
     padding: 10px;
-    width: calc(100% - 10px);
+    width: 100%;
   }
   
   .filter-row {
@@ -1081,8 +1081,9 @@ export default {
   }
   
   .chart-cover {
-    width: 80px !important;
-    height: 80px !important;
+    width: 100px !important;
+    height: 100px !important;
+    margin-right: -10px;
   }
   
   .chart-row {
@@ -1177,6 +1178,19 @@ export default {
   color: #333333 !important;
   width: 1600px !important;
 }
+
+/* 打印模式下的封面图片调整
+.print-mode .chart-cover {
+  width: 100px;
+  height: 100px;
+}
+
+.print-mode .cover-img {
+  width: 100px !important;
+  height: 100px !important;
+  object-fit: cover !important;
+  border-radius: 4px !important;
+} */
 
 .print-mode .charts-section h3 {
   font-size: 36px !important;

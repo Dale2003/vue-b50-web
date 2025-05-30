@@ -75,6 +75,8 @@ main {
   display: flex;
   flex-direction: column;
   gap: 30px;
+  width: 100%;
+  padding: 0px;
 }
 
 footer {
